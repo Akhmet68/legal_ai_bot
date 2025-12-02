@@ -24,9 +24,8 @@ async def handle_document(message: types.Message):
         await message.answer("Пока я работаю только с PDF-файлами как документами. Попробуйте отправить PDF или фото.")
         return
 
-    await message.answer("📄 Документ получен. Выполняю предварительный анализ...")
+    await message.answer("📄 Документ получен. Выполняю предварительный анализ (демо)...")
 
-    # Здесь пока заглушка
     text_preview = read_pdf_stub(doc.file_name)
 
     await message.answer(
@@ -38,7 +37,7 @@ async def handle_document(message: types.Message):
 
 @router.message(F.photo)
 async def handle_photo(message: types.Message):
-    await message.answer("🖼 Фото документа получено. Выполняю предварительный анализ...")
+    await message.answer("🖼 Фото документа получено. Выполняю предварительный анализ (демо)...")
 
     text_preview = read_image_stub()
 

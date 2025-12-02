@@ -7,23 +7,23 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile
 
-# Добавляем корень проекта в sys.path, чтобы корректно импортировать services
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from services.accident_assistant import analyse_accident
+from services.accident_assistant import analyse_accident_extended
 from services.pdf_generator import create_accident_pdf
+from database.db import get_connection
 
 router = Router()
 
 
 class AccidentForm(StatesGroup):
-    place = State()       # где произошло
-    movement = State()    # кто как ехал
-    signs = State()       # знаки / светофор
-    damage = State()      # повреждения / пострадавшие
+    place = State()
+    movement = State()
+    signs = State()
+    damage = State()
 
 
 @router.message(Command("accident"))
@@ -74,7 +74,6 @@ async def accident_finish(message: types.Message, state: FSMContext):
     data = await state.get_data()
     await state.clear()
 
-    # Собираем всё описание в один текст
     full_description = (
         f"Место: {data.get('place')}\n"
         f"Движение: {data.get('movement')}\n"
@@ -82,32 +81,41 @@ async def accident_finish(message: types.Message, state: FSMContext):
         f"Повреждения/пострадавшие: {data.get('damage')}\n"
     )
 
-    # Анализ
-    result = analyse_accident(full_description)
+    analysis_data = analyse_accident_extended(full_description)
+    analysis = analysis_data["legal_analysis"]
+    scheme = analysis_data["scheme"]
+    actions = analysis_data["actions"]
 
-    # 1) Текстовый ответ (как у тебя сейчас)
     await message.answer(
         "✅ Спасибо, информация по ДТП собрана.\n\n"
-        "📋 Сводка по описанию:\n"
+        "📋 <b>Сводка по описанию:</b>\n"
         f"{full_description}\n"
-        "⚖️ Предварительный разбор:\n"
-        f"{result}"
+        "🧩 <b>Схема ДТП (описательная):</b>\n"
+        f"{scheme}\n\n"
+        "⚖️ <b>Предварительный разбор:</b>\n"
+        f"{analysis}\n\n"
+        "📝 <b>Рекомендации по дальнейшим действиям:</b>\n"
+        f"{actions}"
     )
 
-    # 2) Пробуем сформировать и отправить PDF
-    try:
-        await message.answer("⏳ Формирую PDF-отчёт по ДТП...")
+    # PDF
+    pdf_path = create_accident_pdf(full_description, analysis, scheme, actions)
+    pdf_file = FSInputFile(pdf_path)
 
-        pdf_path = create_accident_pdf(full_description, result)
-        pdf_file = FSInputFile(pdf_path)
+    await message.answer_document(
+        pdf_file,
+        caption="📎 PDF-отчёт по ДТП (сводка + схема + анализ + рекомендации)."
+    )
 
-        await message.answer_document(
-            pdf_file,
-            caption="📎 PDF-отчёт по ДТП (предварительный разбор)."
-        )
-    except Exception as e:
-        # Если что-то пошло не так, бот напишет об этом в чат
-        await message.answer(
-            "⚠ Не удалось сформировать PDF-отчёт.\n"
-            f"Техническая информация: {e}"
-        )
+    # Сохраняем кейс в БД
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO cases (tg_id, type, summary, pdf_path)
+        VALUES (%s, %s, %s, %s)
+        """,
+        (message.from_user.id, "dtp", full_description, pdf_path),
+    )
+    conn.commit()
+    conn.close()
