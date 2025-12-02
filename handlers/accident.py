@@ -1,8 +1,17 @@
+import os
+import sys
+
 from aiogram import Router, types
 from aiogram.filters import Command
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile
+
+# Добавляем корень проекта в sys.path, чтобы корректно импортировать services
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
 
 from services.accident_assistant import analyse_accident
 from services.pdf_generator import create_accident_pdf
@@ -65,7 +74,7 @@ async def accident_finish(message: types.Message, state: FSMContext):
     data = await state.get_data()
     await state.clear()
 
-    # Сводка
+    # Собираем всё описание в один текст
     full_description = (
         f"Место: {data.get('place')}\n"
         f"Движение: {data.get('movement')}\n"
@@ -76,20 +85,29 @@ async def accident_finish(message: types.Message, state: FSMContext):
     # Анализ
     result = analyse_accident(full_description)
 
-    # 1) Текстовый ответ в чат
+    # 1) Текстовый ответ (как у тебя сейчас)
     await message.answer(
         "✅ Спасибо, информация по ДТП собрана.\n\n"
         "📋 Сводка по описанию:\n"
         f"{full_description}\n"
-        "⚖ Предварительный разбор:\n"
+        "⚖️ Предварительный разбор:\n"
         f"{result}"
     )
 
-    # 2) PDF-отчёт
-    pdf_path = create_accident_pdf(full_description, result)
-    pdf_file = FSInputFile(pdf_path)
+    # 2) Пробуем сформировать и отправить PDF
+    try:
+        await message.answer("⏳ Формирую PDF-отчёт по ДТП...")
 
-    await message.answer_document(
-        pdf_file,
-        caption="📎 PDF-отчёт по ДТП (предварительный разбор)."
-    )
+        pdf_path = create_accident_pdf(full_description, result)
+        pdf_file = FSInputFile(pdf_path)
+
+        await message.answer_document(
+            pdf_file,
+            caption="📎 PDF-отчёт по ДТП (предварительный разбор)."
+        )
+    except Exception as e:
+        # Если что-то пошло не так, бот напишет об этом в чат
+        await message.answer(
+            "⚠ Не удалось сформировать PDF-отчёт.\n"
+            f"Техническая информация: {e}"
+        )
