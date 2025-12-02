@@ -2,6 +2,7 @@ import asyncio
 
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
+from aiogram.client.default import DefaultBotProperties
 
 from config import TOKEN
 from database.db import init_db
@@ -13,10 +14,14 @@ async def main():
     # Инициализация БД
     init_db()
 
-    bot = Bot(token=TOKEN, parse_mode=ParseMode.HTML)
+    bot = Bot(
+        token=TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    )
+
     dp = Dispatcher()
 
-    # Подключаем роутеры
+    # Подключение роутеров
     dp.include_router(start.router)
     dp.include_router(help.router)
     dp.include_router(questions.router)
