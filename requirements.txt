@@ -4,3 +4,4 @@ PyPDF2
 pillow
 pytesseract
 psycopg2-binary
+reportlab
