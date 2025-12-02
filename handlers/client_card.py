@@ -30,7 +30,7 @@ async def cmd_client(message: types.Message):
     conn = get_connection()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO clients (tg_id, name, phone, notes) VALUES (?,?,?,?)",
+        "INSERT INTO clients (tg_id, name, phone, notes) VALUES (%s, %s, %s, %s)",
         (message.from_user.id, name, phone, notes),
     )
     conn.commit()
